@@ -2,6 +2,11 @@
 
 ## Instructions for reproducibility
 
+the matrices folder is available at the following link: https://drive.google.com/file/d/1QfJeb9F9KgxqFNJk6PefVw0c-j4Dvrpm/view?usp=drive_link
+
+BEFORE EXECUTING ANY OF THE FOLLOWING TESTS THE "MATRICES" FOLDER HAS TO BE DOWNLOADED AND UNZIPPED IN THE DIRECTORY CONTAINING THE PBS FILES!!!!
+(unzipping produces a folder called "matrices" which is necessary for the execution of the jobs)
+
 In this folder there are available several .pbs files, each corresponding to a particular test. For each test that you need to execute see the specification below:
 
 # 1) STRONG SCALING AND WEAK SCALING TESTS
@@ -96,4 +101,4 @@ This script has to be executed in the folder with all of the csv results
 ```bash
   python plot_scaling.py
 ```
-the output is a folder called plot with all the png files of the strong/weak scaling and the efficiency
+the output is a folder called "plot" with all the png files of the strong/weak scaling and efficiency of the executed tests (.csv files) the script has found in the folder
