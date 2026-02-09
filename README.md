@@ -7,7 +7,7 @@ the matrices folder is available at the following link: https://drive.google.com
 BEFORE EXECUTING ANY OF THE FOLLOWING TESTS THE "MATRICES" FOLDER HAS TO BE DOWNLOADED AND UNZIPPED IN THE DIRECTORY CONTAINING THE PBS FILES!!!!
 (unzipping produces a folder called "matrices" which is necessary for the execution of the jobs)
 
-In this folder there are available several .pbs files, each corresponding to a particular test. For each test that you need to execute see the specification below:
+In this repository are available several .pbs files, each corresponding to a particular test. For each test that you need to execute see the specification below:
 
 # 1) STRONG SCALING AND WEAK SCALING TESTS
 
