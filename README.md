@@ -1,8 +1,10 @@
 # PARCO_D2
 
-## Instructions
+## Instructions for reproducibility
 
 In this folder there are available several .pbs files, each corresponding to a particular test. For each test that you need to execute see the specification below:
+
+# 1) STRONG SCALING AND WEAK SCALING TESTS
 
 # test SPMV4 Real Matrices
 
@@ -26,7 +28,7 @@ In this folder there are available several .pbs files, each corresponding to a p
   dos2unix run_spmv_base8_toff.pbs
   qsub run_spmv_base8_toff.pbs
 
-# test SPMV4 synthetic Matrices  
+# test SPMV4 synthetic Matrices 
   ```bash
   dos2unix weak_spmv.pbs
   qsub weak_spmv.pbs 
@@ -87,3 +89,11 @@ In this folder there are available several .pbs files, each corresponding to a p
   dos2unix weak_2d_overlapped.pbs
   qsub weak_2d_overlapped.pbs 
    ```
+
+
+# 2) PLOTTING THE GRAPHS
+This script has to be executed in the folder with all of the csv results  
+```bash
+  python plot_scaling.py
+```
+the output is a folder called plot with all the png files of the strong/weak scaling and the efficiency
