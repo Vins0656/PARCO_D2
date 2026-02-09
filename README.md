@@ -4,7 +4,7 @@
 
 In this folder there are available several .pbs files, each corresponding to a particular test. For each test that you need to execute see the specification below:
 
-# test SPMV4
+# test SPMV4 Real Matrices
 
 - configuration 4 nodes thread on
   ```bash
@@ -26,7 +26,12 @@ In this folder there are available several .pbs files, each corresponding to a p
   dos2unix run_spmv_base8_toff.pbs
   qsub run_spmv_base8_toff.pbs
 
-# test 1D-overlapp
+# test SPMV4 synthetic Matrices  
+  ```bash
+  dos2unix weak_spmv.pbs
+  qsub weak_spmv.pbs 
+   ```
+# test 1D-overlapp Real Matrices
 
 - configuration 4 nodes thread on
   ```bash
@@ -40,33 +45,45 @@ In this folder there are available several .pbs files, each corresponding to a p
 
 - configuration 8 nodes thread on
   ```bash
-  dos2unix overlapped_8_toff.pbs
-  qsub overlapped_8_toff.pbs 
+  dos2unix overlapped_8_ton.pbs
+  qsub overlapped_8_ton.pbs 
 
 - configuratuin 8 nodes threading off
   ```bash
-  dos2unix  .pbs
-  qsub   .pbs 
+  dos2unix overlapped_8_toff.pbs
+  qsub overlapped_8_toff.pbs
 
-# test 2D-overlapp
+# test 1D-overlapp synthetic Matrices 
+  ```bash
+  dos2unix weak_overlapped.pbs
+  qsub weak_overlapped.pbs 
+   ```
+
+# test 2D-overlapp Real Matrices
 
 - configuration 4 nodes thread on
 
    ```bash
-  dos2unix  runTest2d_4_ton.pbs
-  qsub   runTest2d_4_ton.pbs 
+  dos2unix runTest2d_4_ton.pbs
+  qsub runTest2d_4_ton.pbs 
 
 - configuration 4 nodes thread off
    ```bash
-  dos2unix  runTest2d_4_toff.pbs
-  qsub   runTest2d_4_toff.pbs 
+  dos2unix runTest2d_4_toff.pbs
+  qsub runTest2d_4_toff.pbs 
 
 - configuration 8 nodes thread on
    ```bash
-  dos2unix  runTest2d_8_ton.pbs
-  qsub   runTest2d_8_ton.pbs 
+  dos2unix runTest2d_8_ton.pbs
+  qsub runTest2d_8_ton.pbs 
 
-- configuratuin 8 nodes threading off
+- configuration 8 nodes threading off
    ```bash
   dos2unix  runTest2d_8_toff.pbs
-  qsub   runTest2d_8_toff.pbs 
+  qsub runTest2d_8_toff.pbs 
+
+# test 2D-overlapp synthetic Matrices
+```bash
+  dos2unix weak_2d_overlapped.pbs
+  qsub weak_2d_overlapped.pbs 
+   ```
