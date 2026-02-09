@@ -2,6 +2,9 @@
 
 ## Instructions for reproducibility
 
+
+THE PBS ARE WRITTEN TO WORK ON THE LATEST VERSION OF THE UNITN CLUSTER (hpc3)
+
 the matrices folder is available at the following link: https://drive.google.com/file/d/1QfJeb9F9KgxqFNJk6PefVw0c-j4Dvrpm/view?usp=drive_link
 
 BEFORE EXECUTING ANY OF THE FOLLOWING TESTS THE "MATRICES" FOLDER HAS TO BE DOWNLOADED AND UNZIPPED IN THE DIRECTORY CONTAINING THE PBS FILES!!!!
