@@ -1,0 +1,108 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# PBS Directives
+# -----------------------------------------------------------------------------
+#PBS -N spmv_2d_overlapped_scat
+#PBS -l select=8:ncpus=96:mpiprocs=16:mem=64gb
+#PBS -l walltime=06:00:00
+#PBS -l place=excl
+#PBS -q shortCPUQ
+#PBS -e spmv_2d_errors_8_ton.log
+#PBS -o spmv_2d_output_8_ton.log
+# -----------------------------------------------------------------------------
+
+module purge
+module load OpenMPI/4.1.5-GCC-12.3.0
+
+cd $PBS_O_WORKDIR
+
+# --- 1. CONFIGURAZIONE ---
+# Assicurati che il nome del file sorgente sia corretto
+SRC_FILE="Test2D.c++"
+EXEC_NAME="spmv_exec_2d"
+OUTPUT_CSV="tim_2d_8_ton.csv"
+
+rm -f $EXEC_NAME
+
+echo "[INFO] Compilazione in corso di $SRC_FILE..."
+if [ ! -f "$SRC_FILE" ]; then
+    echo "[ERROR] File $SRC_FILE non trovato!"
+    exit 1
+fi
+
+# Compilazione standard C++17
+mpic++ $SRC_FILE -o $EXEC_NAME -O3 -march=native -fopenmp -std=c++17
+
+if [ ! -f "$EXEC_NAME" ]; then
+    echo "[ERROR] Compilazione fallita."
+    exit 1
+fi
+
+# --- 2. CONFIGURAZIONE AMBIENTE ---
+export OMP_NUM_THREADS=3
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
+
+# --- 3. GESTIONE CSV ---
+if [ ! -f "$OUTPUT_CSV" ]; then
+    echo "Matrix,Procs,Threads,MAX_IO,MAX_Setup,MAX_Comm,MAX_Calc,Imbalance_Sec,Total_Loop_Sec,GFLOPS" > $OUTPUT_CSV
+fi
+
+# --- 4. LISTA MATRICI ---
+MATRIX_DIR="matrices"
+MATRICES=(
+    "engine.mtx"
+    "GL7d17.mtx"
+    "GL7d21.mtx"
+    "kron_g500-logn16.mtx"
+    "rail2586.mtx"
+    "rel9.mtx"
+    "t2em.mtx"
+    "wiki-talk-temporal.mtx"
+)
+
+PROCS=(1 2 4 8 16 32 64 128)
+EXTERNAL_REPEATS=5
+
+echo "========================================================================"
+echo "Inizio Benchmark 2D Overlapped SCAT - $(date)"
+echo "========================================================================"
+
+for mtx in "${MATRICES[@]}"; do
+    FILE_PATH="$MATRIX_DIR/$mtx"
+    if [ ! -f "$FILE_PATH" ]; then
+        echo "[WARNING] File $FILE_PATH non trovato! Salto..."
+        continue
+    fi
+
+    for p in "${PROCS[@]}"; do
+       for (( run=1; run<=$EXTERNAL_REPEATS; run++ )); do
+            echo "Running: $mtx | Procs: $p | Run: $run"
+            
+            # Esecuzione con hostfile e binding corretto per OpenMPI 4.1.5
+            RAW_OUTPUT=$(mpirun -np $p \
+                --hostfile $PBS_NODEFILE \
+                --map-by core \
+                --rank-by core \
+                --bind-to core \
+                ./$EXEC_NAME $FILE_PATH 2>&1)
+
+            echo "$RAW_OUTPUT"    
+            
+            # ALLINEAMENTO: Cerchiamo "CSV_DATA:" che è quello che stampa Test2D.c++
+            DATA_LINE=$(echo "$RAW_OUTPUT" | grep "CSV_DATA:")
+
+            if [ ! -z "$DATA_LINE" ]; then
+                # Estraiamo i dati puliti usando sed per rimuovere il prefisso e ogni residuo
+                CLEAN_LINE=$(echo "$DATA_LINE" | sed 's/.*CSV_DATA://')
+                echo "$CLEAN_LINE" >> $OUTPUT_CSV
+            else
+                 echo "[ERROR] Nessun dato CSV generato per $mtx run $run"
+                 # Salviamo l'output in un log di debug per vedere cosa è andato storto
+                 echo "--- Error for $mtx P=$p Run=$run ---" >> debug_output.log
+                 echo "$RAW_OUTPUT" >> debug_output.log
+            fi
+        done
+    done
+done
+echo "Benchmark Completato - $(date)"

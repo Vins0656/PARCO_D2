@@ -1,0 +1,95 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# PBS Directives
+# -----------------------------------------------------------------------------
+#PBS -N spmv_hpc_optimized
+#PBS -l select=4:ncpus=96:mpiprocs=32:mem=64gb
+#PBS -l walltime=06:00:00
+#PBS -l place=excl
+#PBS -q shortCPUQ
+#PBS -e spmv_errors_overlapped_4_ton.log
+#PBS -o spmv_output_overlapped_4_ton.log
+# -----------------------------------------------------------------------------
+
+module purge
+module load OpenMPI/4.1.5-GCC-12.3.0
+
+cd $PBS_O_WORKDIR
+
+# --- CONFIGURAZIONE ---
+SRC_FILE="testoverlapped.c++"    # AGGIORNATO
+EXEC_NAME="spmv_exec_hpc"     
+OUTPUT_CSV="tim_4_ton.csv"  # Output diverso
+
+rm -f $EXEC_NAME
+
+echo "[INFO] Compilazione in corso di $SRC_FILE..."
+if [ ! -f "$SRC_FILE" ]; then
+    echo "[ERROR] File $SRC_FILE non trovato!"
+    exit 1
+fi
+
+mpic++ $SRC_FILE -o $EXEC_NAME -O3 -march=native -fopenmp -std=c++17
+
+if [ ! -f "$EXEC_NAME" ]; then
+    echo "[ERROR] Compilazione fallita."
+    exit 1
+fi
+
+# --- 2. CONFIGURAZIONE AMBIENTE ---
+export OMP_NUM_THREADS=3
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
+
+# --- 3. GESTIONE CSV ---
+if [ ! -f "$OUTPUT_CSV" ]; then
+    echo "Matrix,Procs,Threads,MAX_IO,MAX_Setup,MAX_Comm,MAX_Calc,Imbalance_Sec,Total_Loop_Sec,GFLOPS" > $OUTPUT_CSV
+fi
+
+# --- 4. LISTA MATRICI ---
+MATRIX_DIR="matrices"
+MATRICES=(
+    "engine.mtx"
+    "GL7d17.mtx"
+    "GL7d21.mtx"
+    "kron_g500-logn16.mtx"
+    "rail2586.mtx"
+    "rel9.mtx"
+    "t2em.mtx"
+    "wiki-talk-temporal.mtx"
+)
+
+PROCS=(1 2 4 8 16 32 64 128)
+EXTERNAL_REPEATS=5
+
+echo "========================================================================"
+echo "Inizio Benchmark HPC SpMV (Scatter) - $(date)"
+echo "========================================================================"
+
+for mtx in "${MATRICES[@]}"; do
+    FILE_PATH="$MATRIX_DIR/$mtx"
+    if [ ! -f "$FILE_PATH" ]; then
+        echo "[WARNING] File $FILE_PATH non trovato! Salto..."
+        continue
+    fi
+
+    for p in "${PROCS[@]}"; do
+       for (( run=1; run<=$EXTERNAL_REPEATS; run++ )); do
+            echo "Running: $mtx | Procs: $p | Run: $run"
+            
+            # NOTA: Qui usiamo --map-by node per lo scatter reale se desiderato, o core come nel close
+            # Nel tuo file originale "scatter" usavi --map-by node
+            RAW_OUTPUT=$(mpirun -np $p --hostfile $PBS_NODEFILE --map-by node --bind-to core ./$EXEC_NAME $FILE_PATH)
+            
+            DATA_LINE=$(echo "$RAW_OUTPUT" | grep "CSV_DATA:")
+            
+            if [ ! -z "$DATA_LINE" ]; then
+                CLEAN_LINE=${DATA_LINE#"CSV_DATA:"}
+                echo "$CLEAN_LINE" >> $OUTPUT_CSV
+            else
+                 echo "[ERROR] Nessun dato CSV generato per $mtx run $run"
+            fi
+        done
+    done
+done
+echo "Benchmark Completato - $(date)"

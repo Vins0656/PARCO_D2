@@ -1,0 +1,92 @@
+#!/bin/bash
+#PBS -N spmv_weak_2d
+#PBS -l select=4:ncpus=32:mpiprocs=32:mem=300gb
+#PBS -l walltime=04:00:00
+#PBS -l place=excl
+#PBS -q shortCPUQ
+#PBS -e spmv_weak_2d.err
+#PBS -o spmv_weak_2d.out
+
+module purge
+module load OpenMPI/4.1.5-GCC-12.3.0
+cd $PBS_O_WORKDIR
+
+# --- FIX STACK SIZE ---
+ulimit -s unlimited
+
+SRC_FILE="Test2D.c++"
+EXEC_NAME="spmv_exec_2d"
+OUTPUT_CSV="weak_scaling_2d.csv"
+
+rm -f $EXEC_NAME
+
+echo "[INFO] Compilazione $SRC_FILE..."
+mpic++ $SRC_FILE -o $EXEC_NAME -O3 -march=native -fopenmp -std=c++17
+
+if [ ! -f "$EXEC_NAME" ]; then
+    echo "[FATAL] Compilazione fallita."
+    exit 1
+fi
+
+if [ ! -f "$OUTPUT_CSV" ]; then
+    echo "Matrix,Procs,Threads,MAX_IO,MAX_Setup,MAX_Comm,MAX_Calc,Imbalance_Sec,Total_Loop_Sec,GFLOPS" > $OUTPUT_CSV
+fi
+
+export OMP_NUM_THREADS=1
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
+
+PROCS=(1 2 4 8 16 32 64 128)
+REPEATS=5
+DIR_DIAG="matrices/matrices_weak_diag"
+DIR_RAND="matrices/matrices_weak_rand"
+DIR_STENCIL="matrices/matrices_weak_stencil"
+DIR_BANDED="matrices/matrices_weak_banded"
+
+for p in "${PROCS[@]}"; do
+    # --- DIAGONALE ---
+    FILE="$DIR_DIAG/weak_diag_p${p}.mtx"
+    if [ -f "$FILE" ]; then
+        for (( r=1; r<=REPEATS; r++ )); do
+            echo "[2D] P=$p | TYPE=DIAG | Run=$r"
+            mpirun -np $p --hostfile $PBS_NODEFILE --map-by core --bind-to core ./$EXEC_NAME $FILE > temp_run.log
+            grep "CSV_DATA:" temp_run.log | cut -d: -f2 >> $OUTPUT_CSV
+            cat temp_run.log
+            rm temp_run.log
+        done
+    fi
+
+    # --- RANDOM ---
+    FILE="$DIR_RAND/weak_rand_p${p}.mtx"
+    if [ -f "$FILE" ]; then
+        for (( r=1; r<=REPEATS; r++ )); do
+            echo "[2D] P=$p | TYPE=RAND | Run=$r"
+            mpirun -np $p --hostfile $PBS_NODEFILE --map-by core --bind-to core ./$EXEC_NAME $FILE > temp_run.log
+            grep "CSV_DATA:" temp_run.log | cut -d: -f2 >> $OUTPUT_CSV
+            cat temp_run.log
+            rm temp_run.log
+        done
+    fi
+
+    # --- 3. STENCIL (Nuovo) ---
+    FILE="$DIR_STENCIL/weak_stencil_p${p}.mtx"
+    if [ -f "$FILE" ]; then
+        for (( r=1; r<=REPEATS; r++ )); do
+            echo "[2D] P=$p | TYPE=STENCIL | Run=$r"
+            mpirun -np $p  --hostfile $PBS_NODEFILE --map-by core --bind-to core ./$EXEC_NAME $FILE > temp_run.log
+            grep "CSV_DATA:" temp_run.log | cut -d: -f2 >> $OUTPUT_CSV
+            rm temp_run.log
+        done
+    fi
+
+    # --- 4. BANDED (Nuovo) ---
+    FILE="$DIR_BANDED/weak_banded_p${p}.mtx"
+    if [ -f "$FILE" ]; then
+        for (( r=1; r<=REPEATS; r++ )); do
+            echo "[2D] P=$p | TYPE=BANDED | Run=$r"
+            mpirun -np $p  --hostfile $PBS_NODEFILE --map-by core --bind-to core ./$EXEC_NAME $FILE > temp_run.log
+            grep "CSV_DATA:" temp_run.log | cut -d: -f2 >> $OUTPUT_CSV
+            rm temp_run.log
+        done
+    fi
+done

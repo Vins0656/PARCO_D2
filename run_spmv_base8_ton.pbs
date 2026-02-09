@@ -1,0 +1,85 @@
+#!/bin/bash
+#PBS -N SPMV4_Hybrid_Scaling
+#PBS -l select=8:ncpus=96:mpiprocs=16:ompthreads=3:mem=502gb
+#PBS -l walltime=06:00:00
+#PBS -q shortCPUQ
+#PBS -l place=excl
+#PBS -o spmv4_8_ton.o
+#PBS -e spmv4_8_ton.e
+module purge
+module load OpenMPI/4.1.5-GCC-12.3.0
+
+cd $PBS_O_WORKDIR
+
+# 1. COMPILAZIONE (SPMV4 con OpenMP)
+# Flag copiati da overlapped_4_ton.pbs ma applicati a SPMV4.c++
+echo "Compilazione SPMV4 Hybrid..."
+mpic++ SPMV4.c++ -o spmv_base_8_ton -O3 -march=native -fopenmp -std=c++17
+
+if [ ! -f spmv_base_8_ton ]; then
+    echo "Errore critico: Compilazione fallita!"
+    exit 1
+fi
+
+# 2. CONFIGURAZIONE AMBIENTE (Copiato da overlapped_4_ton.pbs)
+export OMP_NUM_THREADS=3
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
+
+# 3. DEFINIZIONE DATI (Copiato da overlapped_4_ton.pbs)
+MATRIX_DIR="matrices"
+MATRICES=(
+    "engine.mtx"
+    "GL7d17.mtx"
+    "GL7d21.mtx"
+    "kron_g500-logn16.mtx"
+    "rail2586.mtx"
+    "rel9.mtx"
+    "t2em.mtx"
+    "wiki-talk-temporal.mtx"
+)
+
+# Scaling Strong: da 2^0 (1) a 2^7 (128)
+procs=(1 2 4 8 16 32 64 128)
+
+# Output file CSV
+output_file="timings_spmv4_8_ton.csv"
+
+# Intestazione CSV (Deve corrispondere alle colonne del C++)
+# Se il file non esiste, lo crea con l'header
+if [ ! -f $output_file ]; then
+    echo "Matrix,Procs,Threads,IO,Setup,Comm,Calc,Imbalance,Total_Loop,GFLOPS" > $output_file
+fi
+
+# ... (parte precedente invariata)
+
+echo "Inizio benchmark Strong Scaling su 4 nodi..."
+
+# 4. LOOP DI ESECUZIONE (Matrice -> Processi -> Ripetizioni)
+# CORREZIONE 1: Usa ${MATRICES[@]} invece di ${matrices[@]}
+for matrix in "${MATRICES[@]}"; 
+do
+    # Verifica esistenza file con path relativo o assoluto
+    if [ -f "$MATRIX_DIR/$matrix" ] || [ -f "$matrix" ]; then
+        
+        # Gestione path corretto (se le matrici sono dentro una cartella)
+        # Se le matrici sono nella root insieme allo script, usa "$matrix"
+        # Se sono nella cartella matrices, usa "$MATRIX_DIR/$matrix"
+        target_matrix="$matrix"
+        if [ -f "$MATRIX_DIR/$matrix" ]; then target_matrix="$MATRIX_DIR/$matrix"; fi
+
+        for p in "${procs[@]}";
+        do
+            echo "Processing $target_matrix with $p processes..."
+            
+            for i in {1..5};
+            do
+                # CORREZIONE 2: Usa il nome corretto dell'eseguibile (spmv_base_8_ton)
+                mpirun -np $p --hostfile $PBS_NODEFILE --map-by core --bind-to core ./spmv_base_8_ton "$target_matrix" | \
+                grep "CSV_DATA:" | cut -d':' -f2 >> $output_file
+            done
+        done
+    else
+        echo "Attenzione: File $matrix non trovato!"
+    fi
+done

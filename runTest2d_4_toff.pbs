@@ -1,0 +1,92 @@
+#!/bin/bash
+#PBS -N spmv_2d_overlapped
+#PBS -l select=4:ncpus=96:mpiprocs=32:mem=64gb
+#PBS -l walltime=06:00:00
+#PBS -l place=excl
+#PBS -q shortCPUQ  
+#PBS -e spmv_2d_errors_4_toff.log
+#PBS -o spmv_2d_output_4_toff.log
+
+# 1. CARICAMENTO MODULI
+module purge
+module load OpenMPI/4.1.5-GCC-12.3.0
+
+cd $PBS_O_WORKDIR
+
+# --- CONFIGURAZIONE FILE ---
+SRC_FILE="Test2D.c++"
+EXEC_NAME="spmv_exec_2d"
+OUTPUT_CSV="tim_2d_4_toff.csv"
+INFO_FILE="cluster_specs.log"
+RUNTIME_LOG="runtime_resources.log"
+
+# 2. ESTRAZIONE SPECIFICHE HARDWARE (DISTRIBUITA)
+# Esegue lscpu su ogni nodo allocato per vedere esattamente su che hardware gira
+echo "=== DETTAGLI HARDWARE NODI DI CALCOLO - $(date) ===" > $INFO_FILE
+mpirun -np 4 --map-by node \
+    bash -c "echo '--- Nodo: \$(hostname) ---'; \
+    lscpu | grep -E 'Model name|Socket\(s\)|Core\(s\) per socket|Thread\(s\) per core|CPU\(s\):';" >> $INFO_FILE
+
+echo -e "\n=== MEMORIA DISPONIBILE PER NODO ===" >> $INFO_FILE
+mpirun -np 4 --map-by node free -h >> $INFO_FILE
+
+# 3. COMPILAZIONE
+mpic++ $SRC_FILE -o $EXEC_NAME -O3 -march=native -fopenmp -std=c++17
+
+if [ ! -f "$EXEC_NAME" ]; then
+    echo "[ERROR] Compilazione fallita."
+    exit 1
+fi
+
+# 4. CONFIGURAZIONE AMBIENTE
+export OMP_NUM_THREADS=1
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
+
+# Inizializzazione CSV
+if [ ! -f "$OUTPUT_CSV" ]; then
+    echo "Matrix,Procs,Threads,MAX_IO,MAX_Setup,MAX_Comm,MAX_Calc,Imbalance_Sec,Total_Loop_Sec,GFLOPS" > $OUTPUT_CSV
+fi
+
+# 5. MATRICI
+MATRICES=(
+    "engine.mtx"
+    "GL7d17.mtx"
+    "GL7d21.mtx"
+    "kron_g500-logn16.mtx"
+    "rail2586.mtx"
+    "rel9.mtx"
+    "t2em.mtx"
+    "wiki-talk-temporal.mtx"
+)
+
+PROCS=(1 2 4 8 16 32 64 128)
+EXTERNAL_REPEATS=5
+
+echo "=== START RUNTIME MONITORING LOG ===" > $RUNTIME_LOG
+
+# 6. ESECUZIONE BENCHMARK
+for mtx in "${MATRICES[@]}"; do
+    FILE_PATH="matrices/$mtx"
+    for p in "${PROCS[@]}"; do
+       echo "Running: $mtx | Procs: $p"
+       for (( run=1; run<=$EXTERNAL_REPEATS; run++ )); do
+            echo "--- Execution: $mtx P=$p Run=$run ---" >> $RUNTIME_LOG
+            
+            # Esecuzione con monitoraggio binding
+            RAW_OUTPUT=$( /usr/bin/time -v mpirun -np $p \
+                --hostfile $PBS_NODEFILE \
+                --map-by core \
+                --bind-to core \
+                --report-bindings \
+                ./$EXEC_NAME $FILE_PATH 2>> $RUNTIME_LOG )
+            
+            DATA_LINE=$(echo "$RAW_OUTPUT" | grep "CSV_DATA:")
+        
+            if [ ! -z "$DATA_LINE" ]; then
+                CLEAN_LINE=${DATA_LINE#"CSV_DATA:"}
+                echo "$CLEAN_LINE" >> $OUTPUT_CSV
+            fi
+        done
+    done
+done
